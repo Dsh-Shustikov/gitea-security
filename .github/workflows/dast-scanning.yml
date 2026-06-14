@@ -1,0 +1,45 @@
+name: Gitea-Security — DAST (ZAP)
+
+on:
+  workflow_run:
+    workflows: ["Gitea-Security — SAST + Gateway"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  zap-scan:
+    name: "OWASP ZAP Scan"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Start test instance
+        run: |
+          docker run -d --name test-app -p 3000:3000 gitea/gitea:latest
+          sleep 45
+          curl -s -o /dev/null -w "HTTP: %{http_code}" http://localhost:3000
+      - name: OWASP ZAP Scan
+        run: |
+          mkdir -p ./zap-reports
+          chmod 777 ./zap-reports
+          docker run --network host -v $PWD/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:3000 \
+            -r /zap/wrk/zap-report.html -x /zap/wrk/zap-report.xml || true
+      - name: Generate DAST metrics
+        run: |
+          WARN=0; PASS=0; FAIL=0
+          if [ -f ./zap-reports/zap-report.xml ]; then
+            WARN=$(grep -c 'riskcode="1"' ./zap-reports/zap-report.xml 2>/dev/null || echo 0)
+            FAIL=$(grep -c 'riskcode="3"' ./zap-reports/zap-report.xml 2>/dev/null || echo 0)
+            TOTAL=$(grep -c '<alert>' ./zap-reports/zap-report.xml 2>/dev/null || echo 0)
+            PASS=$((TOTAL - WARN - FAIL))
+          fi
+          echo "{\"tool\":\"owasp-zap\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"pass\":$PASS,\"warn\":$WARN,\"fail\":$FAIL}" > ./zap-reports/metrics.json
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: ./zap-reports/
+          retention-days: 30
+      - name: Cleanup
+        if: always()
+        run: docker stop test-app && docker rm test-app
