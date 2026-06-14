@@ -21,6 +21,8 @@ jobs:
         run: echo "REPO_NAME=$(basename ${{ github.repository }})" >> $GITHUB_ENV
       - name: Create dirs
         run: mkdir -p reports/${{ env.REPO_NAME }}/{sast,metrics}
+      - name: Downgrade Go version in go.mod
+        run: sed -i 's/go 1\.[0-9]*\.[0-9]*/go 1.24/' go.mod
       - name: Run gosec
         uses: securego/gosec@master
         with:
