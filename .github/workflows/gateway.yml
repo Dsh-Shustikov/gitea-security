@@ -1,0 +1,43 @@
+name: Gitea-Security — Gateway
+
+on:
+  workflow_run:
+    workflows: ["Gitea-Security — SAST"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  security-gate:
+    name: "Security Gateway"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get repo name
+        run: echo "REPO_NAME=$(basename ${{ github.repository }})" >> $GITHUB_ENV
+      - name: Download SAST reports
+        uses: actions/download-artifact@v4
+        with:
+          name: sast-${{ env.REPO_NAME }}
+          path: reports/
+      - name: Security Gate
+        run: |
+          echo "=== Security Gate: ${{ env.REPO_NAME }} ==="
+          HIGH=0
+          if [ -f reports/sast/gosec-report.json ]; then
+            HIGH=$(grep -c '"severity": "HIGH"' reports/sast/gosec-report.json 2>/dev/null || echo 0)
+          fi
+          echo "HIGH: $HIGH"
+          if [ "$HIGH" -gt 0 ]; then echo "BLOCKED"; exit 1; fi
+          echo "PASSED"
+      - name: Comment PR on failure
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## 🔴 Security Gateway — деплой заблокирован\n\nHIGH: обнаружены уязвимости'
+            })

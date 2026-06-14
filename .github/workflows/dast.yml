@@ -1,8 +1,8 @@
-name: Gitea-Security — DAST (ZAP)
+name: Gitea-Security — DAST
 
 on:
   workflow_run:
-    workflows: ["Gitea-Security — SAST + Gateway"]
+    workflows: ["Gitea-Security — SAST"]
     types: [completed]
     branches: [main]
 
@@ -19,8 +19,7 @@ jobs:
           curl -s -o /dev/null -w "HTTP: %{http_code}" http://localhost:3000
       - name: OWASP ZAP Scan
         run: |
-          mkdir -p ./zap-reports
-          chmod 777 ./zap-reports
+          mkdir -p ./zap-reports && chmod 777 ./zap-reports
           docker run --network host -v $PWD/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://localhost:3000 \
             -r /zap/wrk/zap-report.html -x /zap/wrk/zap-report.xml || true
@@ -33,7 +32,7 @@ jobs:
             TOTAL=$(grep -c '<alert>' ./zap-reports/zap-report.xml 2>/dev/null || echo 0)
             PASS=$((TOTAL - WARN - FAIL))
           fi
-          echo "{\"tool\":\"owasp-zap\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"pass\":$PASS,\"warn\":$WARN,\"fail\":$FAIL}" > ./zap-reports/metrics.json
+          echo "{\"pass\":$PASS,\"warn\":$WARN,\"fail\":$FAIL}" > ./zap-reports/metrics.json
       - name: Upload reports
         uses: actions/upload-artifact@v4
         with:

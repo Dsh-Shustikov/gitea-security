@@ -1,0 +1,38 @@
+name: Gitea-Security — Security Checks
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  security-checks:
+    name: "Security Checks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Get repo name
+        run: echo "REPO_NAME=$(basename ${{ github.repository }})" >> $GITHUB_ENV
+      - name: Create dirs
+        run: mkdir -p reports/${{ env.REPO_NAME }}/{security,metrics}
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      - name: Copy results
+        run: cp results.sarif reports/${{ env.REPO_NAME }}/security/ 2>/dev/null || echo "clean" > reports/${{ env.REPO_NAME }}/security/clean.txt
+      - name: Generate metrics
+        run: |
+          LEAKS=0
+          if [ -f results.sarif ]; then
+            LEAKS=$(grep -c '"level":"error"' results.sarif 2>/dev/null || echo 0)
+          fi
+          echo "{\"gitleaks_leaks\":$LEAKS}" > reports/${{ env.REPO_NAME }}/metrics/security.json
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-${{ env.REPO_NAME }}
+          path: reports/${{ env.REPO_NAME }}/
+          retention-days: 30
