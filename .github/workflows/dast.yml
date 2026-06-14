@@ -1,4 +1,4 @@
-name: DAST Scanning
+name: Gitea-Security — DAST (ZAP)
 
 on:
   workflow_run:
