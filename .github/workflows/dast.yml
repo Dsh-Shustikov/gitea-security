@@ -1,31 +1,38 @@
-name: Gitea-Security — DAST (Test)
+@"
+name: Gitea-Security — DAST
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Gitea-Security — SAST + DAST"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   zap-scan:
     name: "OWASP ZAP Scan"
     runs-on: ubuntu-latest
     steps:
-      - name: Start Gitea
+      - name: Start test instance
         run: |
           docker run -d --name gitea-dast -p 3000:3000 gitea/gitea:latest
           sleep 45
           curl -s -o /dev/null -w "HTTP: %{http_code}" http://localhost:3000
-      - name: ZAP Scan
+      - name: OWASP ZAP Scan
         run: |
-          mkdir -p ./zap-reports && chmod 777 ./zap-reports
-          docker run --network host -v $PWD/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
+          mkdir -p ./zap-reports
+          chmod 777 ./zap-reports
+          docker run --network host -v `$PWD/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://localhost:3000 \
             -r zap-report.html -x zap-report.xml || true
           ls -la ./zap-reports/
       - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report-test
+          name: zap-report
           path: ./zap-reports/
-          retention-days: 7
+          retention-days: 30
       - name: Cleanup
         if: always()
         run: docker stop gitea-dast && docker rm gitea-dast
+"@ | Out-File -FilePath .github\workflows\dast.yml -Encoding UTF8
