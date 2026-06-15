@@ -14,19 +14,15 @@ jobs:
     steps:
       - name: Start test instance
         run: |
-          docker run -d --name test-app -p 3000:3000 gitea/gitea:latest
-          echo "Waiting for Gitea..."
-          for i in 1 2 3 4 5 6 7 8; do
-            sleep 15
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo 0)
-            echo "  Attempt $i: HTTP $CODE"
-            [ "$CODE" = "200" ] && break
-          done
+          docker run -d --name gitea-dast -p 3000:3000 gitea/gitea:latest
+          sleep 45
+          curl -s -o /dev/null -w "HTTP: %{http_code}" http://localhost:3000
       - name: OWASP ZAP Scan
         run: |
-          mkdir -p ./zap-reports && chmod 777 ./zap-reports
+          mkdir -p ./zap-reports
+          chmod 777 ./zap-reports
           docker run --network host -v $PWD/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://localhost:3000 -m 6 -D 120 \
+            zap-baseline.py -t http://localhost:3000 \
             -r /zap/wrk/zap-report.html -x /zap/wrk/zap-report.xml || true
           ls -la ./zap-reports/
       - name: Upload reports
@@ -37,4 +33,4 @@ jobs:
           retention-days: 30
       - name: Cleanup
         if: always()
-        run: docker stop test-app && docker rm test-app
+        run: docker stop gitea-dast && docker rm gitea-dast
