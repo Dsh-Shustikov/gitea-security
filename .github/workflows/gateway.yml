@@ -39,7 +39,6 @@ jobs:
           echo "  SECURITY GATEWAY — ФИНАЛЬНЫЙ ВЕРДИКТ"
           echo "========================================"
           HIGH=0; LEAKS=0; BLOCK=false
-
           if [ -f reports/sast/sast/gosec-report.json ]; then
             HIGH=$(grep -c '"severity": "HIGH"' reports/sast/sast/gosec-report.json 2>/dev/null || echo 0)
             echo "🔍 SAST: HIGH=$HIGH"
@@ -47,24 +46,19 @@ jobs:
           else
             echo "🔍 SAST: отчёт не найден"
           fi
-
           if [ -f reports/dast/zap-report.xml ]; then
             WARN=$(grep -c 'riskcode="1"' reports/dast/zap-report.xml 2>/dev/null || echo 0)
             echo "🌐 DAST: WARN=$WARN"
           else
             echo "🌐 DAST: отчёт не найден"
           fi
-
           if [ -f reports/security/security/clean.txt ]; then
             echo "🔐 Gitleaks: ✅ Чисто"
           elif [ -f reports/security/security/results.sarif ]; then
             LEAKS=$(grep -c '"level":"error"' reports/security/security/results.sarif 2>/dev/null || echo 0)
             echo "🔐 Gitleaks: ⚠️ НАЙДЕНО ($LEAKS)"
             [ "$LEAKS" -gt 0 ] && BLOCK=true
-          else
-            echo "🔐 Gitleaks: отчёт не найден"
           fi
-
           echo "========================================"
           if [ "$BLOCK" = true ]; then
             echo "🔴 ВЕРДИКТ: ДЕПЛОЙ ЗАБЛОКИРОВАН"
