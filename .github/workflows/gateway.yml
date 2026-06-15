@@ -3,7 +3,7 @@ name: Gitea-Security — Gateway
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["Gitea-Security — DAST", "Gitea-Security — Security Checks"]
+    workflows: ["Gitea-Security — SAST + DAST", "Gitea-Security — Security Checks"]
     types: [completed]
     branches: [main]
 
