@@ -2,9 +2,7 @@ name: Gitea-Security — Security Checks
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Gitea-Security — SAST"]
-    types: [completed]
+  push:
     branches: [main]
 
 jobs:
