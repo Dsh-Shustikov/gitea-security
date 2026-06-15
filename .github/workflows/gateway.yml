@@ -1,6 +1,7 @@
 name: Gitea-Security — Gateway
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Gitea-Security — DAST", "Gitea-Security — Security Checks"]
     types: [completed]
@@ -14,28 +15,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Get repo name
         run: echo "REPO_NAME=$(basename ${{ github.repository }})" >> $GITHUB_ENV
-
       - name: Download SAST
         uses: actions/download-artifact@v4
         with:
           name: sast-${{ env.REPO_NAME }}
           path: reports/sast/
         continue-on-error: true
-
       - name: Download DAST
         uses: actions/download-artifact@v4
         with:
           name: zap-report
           path: reports/dast/
         continue-on-error: true
-
       - name: Download Security
         uses: actions/download-artifact@v4
         with:
           name: security-${{ env.REPO_NAME }}
           path: reports/security/
         continue-on-error: true
-
       - name: Security Gate — Вердикт
         run: |
           echo "========================================"

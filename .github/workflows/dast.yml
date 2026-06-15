@@ -1,6 +1,7 @@
 name: Gitea-Security — DAST
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Gitea-Security — SAST"]
     types: [completed]
