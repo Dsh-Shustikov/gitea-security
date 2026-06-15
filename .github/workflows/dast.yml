@@ -17,7 +17,7 @@ jobs:
         run: |
           mkdir -p ./zap-reports
           chmod 777 ./zap-reports
-          docker run --network host -v C:\tmp\gitea-security/zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
+          docker run --network host -v ./zap-reports:/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://localhost:3000 \
             -r zap-report.html -x zap-report.xml || true
           ls -la ./zap-reports/
