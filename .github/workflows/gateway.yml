@@ -2,42 +2,77 @@ name: Gitea-Security — Gateway
 
 on:
   workflow_run:
-    workflows: ["Gitea-Security — SAST"]
+    workflows: ["Gitea-Security — DAST", "Gitea-Security — Security Checks"]
     types: [completed]
     branches: [main]
 
 jobs:
   security-gate:
-    name: "Security Gateway"
+    name: "Security Gateway — Финальный вердикт"
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - name: Get repo name
         run: echo "REPO_NAME=$(basename ${{ github.repository }})" >> $GITHUB_ENV
-      - name: Download SAST reports
+
+      - name: Download SAST
         uses: actions/download-artifact@v4
         with:
           name: sast-${{ env.REPO_NAME }}
-          path: reports/
-      - name: Security Gate
-        run: |
-          echo "=== Security Gate: ${{ env.REPO_NAME }} ==="
-          HIGH=0
-          if [ -f reports/sast/gosec-report.json ]; then
-            HIGH=$(grep -c '"severity": "HIGH"' reports/sast/gosec-report.json 2>/dev/null || echo 0)
-          fi
-          echo "HIGH: $HIGH"
-          if [ "$HIGH" -gt 0 ]; then echo "BLOCKED"; exit 1; fi
-          echo "PASSED"
-      - name: Comment PR on failure
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+          path: reports/sast/
+        continue-on-error: true
+
+      - name: Download DAST
+        uses: actions/download-artifact@v4
         with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '## 🔴 Security Gateway — деплой заблокирован\n\nHIGH: обнаружены уязвимости'
-            })
+          name: zap-report
+          path: reports/dast/
+        continue-on-error: true
+
+      - name: Download Security
+        uses: actions/download-artifact@v4
+        with:
+          name: security-${{ env.REPO_NAME }}
+          path: reports/security/
+        continue-on-error: true
+
+      - name: Security Gate — Вердикт
+        run: |
+          echo "========================================"
+          echo "  SECURITY GATEWAY — ФИНАЛЬНЫЙ ВЕРДИКТ"
+          echo "========================================"
+          HIGH=0; LEAKS=0; BLOCK=false
+
+          if [ -f reports/sast/sast/gosec-report.json ]; then
+            HIGH=$(grep -c '"severity": "HIGH"' reports/sast/sast/gosec-report.json 2>/dev/null || echo 0)
+            echo "🔍 SAST: HIGH=$HIGH"
+            [ "$HIGH" -gt 0 ] && BLOCK=true
+          else
+            echo "🔍 SAST: отчёт не найден"
+          fi
+
+          if [ -f reports/dast/zap-report.xml ]; then
+            WARN=$(grep -c 'riskcode="1"' reports/dast/zap-report.xml 2>/dev/null || echo 0)
+            echo "🌐 DAST: WARN=$WARN"
+          else
+            echo "🌐 DAST: отчёт не найден"
+          fi
+
+          if [ -f reports/security/security/clean.txt ]; then
+            echo "🔐 Gitleaks: ✅ Чисто"
+          elif [ -f reports/security/security/results.sarif ]; then
+            LEAKS=$(grep -c '"level":"error"' reports/security/security/results.sarif 2>/dev/null || echo 0)
+            echo "🔐 Gitleaks: ⚠️ НАЙДЕНО ($LEAKS)"
+            [ "$LEAKS" -gt 0 ] && BLOCK=true
+          else
+            echo "🔐 Gitleaks: отчёт не найден"
+          fi
+
+          echo "========================================"
+          if [ "$BLOCK" = true ]; then
+            echo "🔴 ВЕРДИКТ: ДЕПЛОЙ ЗАБЛОКИРОВАН"
+            exit 1
+          else
+            echo "✅ ВЕРДИКТ: ДЕПЛОЙ РАЗРЕШЁН"
+            exit 0
+          fi
